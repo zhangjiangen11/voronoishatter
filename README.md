@@ -12,6 +12,10 @@ An easy and dynamic way to create Voronoi fracture geometry for your Godot game.
     <img src="images/teapot_pre_shatter.jpg" width="400" alt="Before example of VoronoiShatter applied to teapot">
     <img src="images/teapot_post_shatter.jpg" width="400" alt="After example of VoronoiShatter applied to teapot">
 </p>
+<p align="center">
+    <img src="images/3d_textures.jpg" width="400" alt="3D textures example">
+    <img src="images/cube_samples.jpg" width="400" alt="Visualization of VoronoiShatter samples">
+</p>
 
 
 # Features
