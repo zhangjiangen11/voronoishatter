@@ -19,7 +19,7 @@ An easy and dynamic way to create Voronoi fracture geometry for your Godot game.
 
 
 # Features
-* ✅ Create complex fractures of both convex and concave meshes
+* ✅ Create complex fractures on both convex and concave meshes
 * ✅ Seamless Voronoi geometry and materials with high fidelity to your mesh
 * ✅ Create rigidbodies from fractures for cool physic simulations
 * ✅ Multi-threaded worker class for parallelized
@@ -35,40 +35,29 @@ An easy and dynamic way to create Voronoi fracture geometry for your Godot game.
 There are two ways to use this tool: in the editor, and in your project's code to use the underlying tools.
 
 ## In the editor (recommended)
-Voronoi shatter meshes can be generated using a custom node, **VoronoiShatter**, that is loaded with the plugin after it's installed. **Please note:** This plugin is highly experimental. It has not been tested on a large variety of machines. I have found it to be relatively stable, but you MAY experience crashes, so make sure to save often when using the plugin.
+Voronoi shatter meshes can be generated using a custom node, **VoronoiShatter**, that is loaded with the plugin after it's installed. **Please note:** This plugin is highly experimental. It has not been tested on a large variety of machines. I have found it to be relatively stable, but you MAY experience crashes, so make sure to save before generating fracture meshes.
+
+<div>
+    <img src="images/node_settings.jpg" width="256" alt="Node settings">
+</div>
+
 
 ### VoronoiShatter Node
 This is the way to run this tool in the editor. Simply create this node in your scene, add a **MeshInstance3D** as a child, and click "**Generate Fracture Meshes**." Depending on your hardware, the below settings, and complexity of the mesh itself, the mesh will generate in seconds in a **VoronoiCollection** node.
 
-#### Random Color
-Assigns a random color to each voronoi fragment after generation. This is helpful for previewing the geometry itself.
-
-#### Inherit Outer Material
-Assigns the same material that the parent mesh currently has to this mesh.
-
-#### Inner Material
-Assigns an option additional material to the inner faces of your voronoi mesh. Allows you to do cool stuff like creating glass fragments or glowing/emissive shards.
-
-#### Samples
-How many random points are generated inside the bounds of your mesh for creating the voronoi cells. Because the outermost cells (e.g. cells that don't intersect with your mesh at all) are clipped to the target mesh geometry, some of these may be culled, so this only _roughly_ corresponds to the number of shards you end up with, but in general, more samples = more shards = smaller shards. **Please note:** Using a low sample count (< 6 or so) may lead to loss in geometry depending on the seed.
-
-#### Seed
-Determines the RNG seed used for generating samples (has restricted effect if using a 3D texture).
-
-#### Cell Scale
-(v0.0.1 Not yet implemented) Allows you to adjust the precise scale of the Voronoi cell meshes so you can make them overlap or add more separation between one another.
-
-#### Sample Texture
-3D texture used to direct the pattern where the samples are generated. (In general: lighter = more likely a sample shows up at a spot, using rejection-based random sampling)
-
-#### Hide original
-Hide the target mesh after generating.
-
-#### Delete existing fractures
-Deletes any VoronoiCollections that are children of this node when "Generate Fracture Meshes" is clicked again.
+* **Random Color** - Assigns a random color to each Voronoi fragment after generation. This is helpful for previewing the geometry itself to see how your settings influence generation.
+* **Inherit Outer Material** - Assigns the same material that the parent mesh currently has to all surfaces except the inner fracture surfaces.
+* **Outer Material** - Assigns a material to all surfaces except the inner fracture surfaces.
+* **Inner Material** - Assigns an optional additional material to the inner faces of your Voronoi mesh. Allows you to do cool stuff like creating glass fragments or glowing/emissive shards.
+* **Samples** - How many random points are generated inside the bounds of your mesh for creating the Voronoi cells. Because the outermost cells (e.g. cells that don't intersect with your mesh at all) are clipped to the target mesh geometry, some of these may be culled, so this only _roughly_ corresponds to the number of shards you end up with, but in general, more samples = more shards = smaller shards. **Please note:** Using a low sample count (< 6 or so) may lead to loss in geometry depending on the seed.
+* **Seed** - Determines the RNG seed used for generating samples (has restricted effect if using a 3D texture).
+* **Cell Scale** - Allows you to adjust the local scale of the generated Voronoi cell meshes so you can make them overlap or add more separation between one another.
+* **Sample Texture** - 3D texture used to direct the pattern where the samples are generated. (In general: lighter = more likely a sample shows up at a spot, using rejection-based random sampling)
+* **Hide Original** - Hide the target mesh after generating.
+* **Delete Existing Fractures** - Deletes any VoronoiCollections that are children of this node when "Generate Fracture Meshes" is clicked again.
 
 ### VoronoiCollection Node
-This is a simple node that is created with the mesh fragments. In the inspector, you can use the "Create Rigid Bodies" button to create rigid bodies and simple Voronoi shard collision shapes for convenience. Note: this can be slow on high shard counts or complex geometry. Use at your own risk.
+This is a simple node that is created with the mesh fragments. In the inspector, you can use the "**Create Rigid Bodies**" button to create rigid bodies and simple Voronoi shard collision shapes for convenience. Note: this can be slow on high mesh counts or complex geometry. Use at your own risk.
 
 ## In code
 Generally speaking, the most efficient way to use this plugin in code is to create a `VoronoiWorker` node, register it as a singleton (or use dependency injection), and start the worker threads. 
@@ -99,7 +88,7 @@ var random_seed: int
 var num_samples: int
 # (optional) A 3D texture to finely control the seed placement
 var texture: Texture3D
-# (optional, default 1.0) The size of the voronoi cell itself. Not yet implemented.
+# (optional, default 1.0) The size of the Voronoi cell itself. Not yet implemented.
 var cell_scale: float = 1.0
 ```
 
@@ -125,5 +114,8 @@ GDScript:
 * **Stick to triplanar materials on the inner faces** - The UV maps aren't calculated for the inner shard faces, so it's best to use triplanar materials for the inner faces. The UVs from the outer meshes are transferred properly.
 
 # Changelog
+## v0.2-pre (next)
+* Rendering the samples in the UI is faster. Some slight performance gains from disabling signals on generated meshes.
+
 ## v0.0.1
-First version of the tool. Yay!
+* First version of the tool. Yay!

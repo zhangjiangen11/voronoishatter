@@ -39,8 +39,8 @@ var _inherit_outer_material := false
         seed = value
         refresh_view()
 
-# CELL SCALE - not yet implemented...
-# @export
+## Cell scale - change the size of the shape that is actually clipped
+@export
 var cell_scale: float = 1.0
 
 ## An optional 3D texture that influences where the samples points are generated.
@@ -116,6 +116,7 @@ func generate_fracture_meshes(config: VoronoiGeneratorConfig):
 
     # Create the parent node collection
     current_collection = VoronoiCollection.new()
+    current_collection.set_block_signals(true)
     current_collection.name = "Fractured_" + target.name + "_" + str(Time.get_ticks_msec())
     add_child(current_collection)
     current_collection.set_owner(owner)
@@ -130,13 +131,14 @@ func handle_mesh_generated(result: VoronoiWorkerResult):
     Callable(self, "create_from_voronoi_mesh").call_deferred(result)
 
 func handle_voronoi_fracture_finished(result: MeshInstance3D):
-    Callable(self, "print_done").call_deferred()
+    Callable(self, "handle_done").call_deferred()
 
-func print_done():
+func handle_done():
     await get_tree().process_frame
     if started:
         VoronoiLog.log("Completed in " + str((Time.get_ticks_usec() - started) / 10e5) + " seconds")
         started = null
+    current_collection.set_block_signals(false)
 
 func create_from_voronoi_mesh(result: VoronoiWorkerResult):
     # Don't create geometry for meshes that aren't targeted by this node
@@ -149,12 +151,14 @@ func create_from_voronoi_mesh(result: VoronoiWorkerResult):
         VoronoiLog.err("Skipping creation of null mesh")
 
     var mesh_instance = MeshInstance3D.new()
+    mesh_instance.set_block_signals(true)
     var target = get_target_mesh()
     var mesh = voronoi_mesh.mesh
     mesh_instance.scale = target.scale
     mesh_instance.name = "FracturedPiece_" + str(mesh.get_rid())
     mesh_instance.mesh = mesh
     mesh_instance.position -= voronoi_mesh.position * target.scale
+    mesh_instance.scale = Vector3.ONE * cell_scale
 
     var has_outside_faces = mesh_instance.mesh.get_surface_count() > 1
 
@@ -179,6 +183,7 @@ func create_from_voronoi_mesh(result: VoronoiWorkerResult):
 
     current_collection.add_child(mesh_instance)
     mesh_instance.set_owner(owner)
+    mesh_instance.set_block_signals(false)
 
 
 func get_config() -> VoronoiGeneratorConfig:
@@ -212,6 +217,7 @@ func refresh_view():
     material.disable_receive_shadows = true
     for sample in VoronoiGenerator.sample_points(target.mesh, config):
         var sphere = CSGSphere3D.new()
+        sphere.set_block_signals(true)
         sphere.material = material
         sphere.radius = 0.02
         sphere.rings = 4
