@@ -124,7 +124,8 @@ func generate_fracture_meshes(config: VoronoiGeneratorConfig):
     if hide_original:
         target.visible = false
 
-    VoronoiGenerator.create_from_mesh(target, config)
+    var voronoi_worker = Engine.get_singleton("EditorVoronoiWorker") as VoronoiWorker
+    VoronoiGenerator.create_from_mesh(target, config, voronoi_worker)
 
 # Called from a worker signal when a mesh is generated.
 func handle_mesh_generated(result: VoronoiWorkerResult):
@@ -171,12 +172,11 @@ func create_from_voronoi_mesh(result: VoronoiWorkerResult):
             mesh_instance.mesh.surface_set_material(surface, material)
     else:
         if has_outside_faces:
-            # Because the inner surface is 0, all other surfaces will be their original index in the mesh + 1.
-            for surface_id in range(1, mesh_instance.mesh.get_surface_count()):
                 if inherit_outer_material:
-                    mesh_instance.mesh.surface_set_material(surface_id, target.mesh.surface_get_material(surface_id - 1))
+                    VoronoiGenerator.apply_target_textures(mesh_instance, target)
                 elif outer_material:
-                    mesh_instance.mesh.surface_set_material(surface_id, outer_material)
+                    for surface_id in range(1, mesh_instance.mesh.get_surface_count()):
+                        mesh_instance.mesh.surface_set_material(surface_id, outer_material)
 
         if inner_material:
                 mesh_instance.mesh.surface_set_material(0, inner_material)

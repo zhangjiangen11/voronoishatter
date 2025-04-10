@@ -3,10 +3,10 @@ extends Object
 
 class_name VoronoiGenerator
 
-# End-to-end function that samples points, creates tetrahedra, and generates voronoi cells (asyncronously).
-# This is the best way to create fractures from a mesh. REQUIRES THE VoronoiWorker TO WORK!
-# Make sure you listen to the signal as described in README.md. 
-static func create_from_mesh(mesh: MeshInstance3D, options: VoronoiGeneratorConfig) -> void:
+## End-to-end function that samples points, creates tetrahedra, and generates voronoi cells (asyncronously).
+## This is the best way to create fractures from a mesh. REQUIRES THE VoronoiWorker TO WORK!
+## Make sure you listen to the signal as described in README.md. 
+static func create_from_mesh(mesh: MeshInstance3D, options: VoronoiGeneratorConfig, voronoi_worker: VoronoiWorker) -> void:
     var points = sample_points(mesh.mesh, options)
     var tetrahedra = create_delauney_tetrahedra(points)
     # Dictionary[Vector3, int]
@@ -15,10 +15,10 @@ static func create_from_mesh(mesh: MeshInstance3D, options: VoronoiGeneratorConf
         if points[i] not in point_to_index_map:
             point_to_index_map[points[i]] = i
 
-    generate_voronoi_cells(mesh, tetrahedra, points, point_to_index_map)
+    generate_voronoi_cells(mesh, tetrahedra, points, point_to_index_map, voronoi_worker)
 
-# This function is used to sample points inside a bounding box. These points
-# can be used for Delauney Tetrahedronization.
+## This function is used to sample points inside a bounding box. These points
+## can be used for Delauney Tetrahedronization.
 static func sample_points(mesh: Mesh, options: VoronoiGeneratorConfig) -> Array[Vector3]:
     var aabb = mesh.get_aabb()
     var random_seed = options.random_seed
@@ -70,8 +70,7 @@ static func sample_points(mesh: Mesh, options: VoronoiGeneratorConfig) -> Array[
 
     return sample_points + endpoints
 
-# Helper function to sample a Texture3D
-# Returns value in range 0.0 to 1.0
+## Helper function to sample a Texture3D. Returns value in range 0.0 to 1.0
 static func sample_3d_texture(texture: Texture3D, normalized_position: Vector3) -> float:
     # Ensure position is in 0-1 range
     var pos = normalized_position.clamp(Vector3.ZERO, Vector3.ONE)
@@ -93,7 +92,7 @@ static func sample_3d_texture(texture: Texture3D, normalized_position: Vector3) 
     # Converting color to grayscale using standard luminance formula
     return color.r * 0.299 + color.g * 0.587 + color.b * 0.114
 
-# Creates a set of tetrahedra from the given point cloud
+## Creates a set of tetrahedra from the given point cloud
 static func create_delauney_tetrahedra(points: Array[Vector3]) -> Array[Tetrahedron]:
     var packed_points_array = PackedVector3Array(points)
     var delauney_indices = Geometry3D.tetrahedralize_delaunay(points)
@@ -123,8 +122,8 @@ static func create_delauney_tetrahedra(points: Array[Vector3]) -> Array[Tetrahed
 
     return tetrahedra
 
-# Create voronoi cell meshes using the circumcenters of the given tetrahedra
-static func generate_voronoi_cells(clipping_mesh: MeshInstance3D, tetrahedra: Array[Tetrahedron], points: Array[Vector3], point_index_map: Dictionary) -> void:
+## Create voronoi cell meshes using the circumcenters of the given tetrahedra
+static func generate_voronoi_cells(clipping_mesh: MeshInstance3D, tetrahedra: Array[Tetrahedron], points: Array[Vector3], point_index_map: Dictionary, voronoi_worker: VoronoiWorker) -> void:
     # Map: Site Index -> List of Circumcenters (potential Voronoi cell vertices)
     # Dictionary[int, Array[Vector3]]
     var potential_cell_vertices: Dictionary[int, Array] = {}
@@ -153,9 +152,15 @@ static func generate_voronoi_cells(clipping_mesh: MeshInstance3D, tetrahedra: Ar
     for key in potential_cell_vertices:
         var voronoi_cell = VoronoiCell.new()
 
-        voronoi_cell.vertices = potential_cell_vertices[key]
+        # Re-create the aray from the vertices (I know, I know... but the type system is just a bit wonky in GDScript)
+        for vertex in potential_cell_vertices[key]:
+            voronoi_cell.vertices += [vertex] as Array[Vector3]
         voronoi_cell.site = points[key]
         cells += [voronoi_cell]
 
-    var worker = Engine.get_singleton("EditorVoronoiWorker") as VoronoiWorker
-    worker.create_geometry_from_sites_async(clipping_mesh, cells)
+    voronoi_worker.create_geometry_from_sites_async(clipping_mesh, cells)
+
+## Applies outer textures from the generated texture to the target. Because the inner surface is 0, all other surfaces will be their original index in the mesh + 1.
+static func apply_target_textures(generated_mesh: MeshInstance3D, target_mesh: MeshInstance3D) -> void:
+    for surface_id in range(1, generated_mesh.mesh.get_surface_count()):
+        generated_mesh.mesh.surface_set_material(surface_id, target_mesh.mesh.surface_get_material(surface_id - 1))

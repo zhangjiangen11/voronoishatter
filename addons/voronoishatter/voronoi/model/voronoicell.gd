@@ -3,8 +3,7 @@ extends Object
 
 class_name VoronoiCell
 
-## Array[Vector3]
-var vertices: Array = []
+var vertices: Array[Vector3] = []
 var site: Vector3
 
 func is_valid() -> bool:

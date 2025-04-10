@@ -43,7 +43,7 @@ Voronoi shatter meshes can be generated using a custom node, **VoronoiShatter**,
 
 
 ### VoronoiShatter Node
-This is the way to run this tool in the editor. Simply create this node in your scene, add a **MeshInstance3D** as a child, and click "**Generate Fracture Meshes**." Depending on your hardware, the below settings, and complexity of the mesh itself, the mesh will generate in seconds in a **VoronoiCollection** node.
+This is the way to run this tool in the editor. Simply create this node in your scene, add a **MeshInstance3D** as a child, and click "**Generate Fracture Meshes**." Depending on your hardware, the below settings, and complexity of the mesh itself, the mesh will generate in seconds in a **VoronoiCollection** node. Make sure the mesh you are shattering is **manifold**—no surface should have any disconnected points, or the underlying CSG combiner mechanism will return a blank set of meshes.
 
 * **Random Color** - Assigns a random color to each Voronoi fragment after generation. This is helpful for previewing the geometry itself to see how your settings influence generation.
 * **Inherit Outer Material** - Assigns the same material that the parent mesh currently has to all surfaces except the inner fracture surfaces.
@@ -105,7 +105,7 @@ GDScript:
     var worker = Engine.get_singleton("MyVoronoiWorker", voronoi_worker)
     worker.mesh_generated.connect(...) # In your callback, perform logic for doing something with the mesh (e.g. adding it to the scene). Remember to use `call_deferred` before doing anything that requires the main thread!
     worker.voronoi_fracture_finished.connect(...) # In the callback, perform logic when the entire job is done. 
-    VoronoiGenerator.create_from_mesh(my_awesome_mesh, config)
+    VoronoiGenerator.create_from_mesh(my_awesome_mesh, config, voronoi_worker)
 ```
 
 ### Tips for making this tool actually useful to you

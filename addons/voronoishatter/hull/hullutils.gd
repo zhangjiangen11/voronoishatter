@@ -40,21 +40,13 @@ func clip_to_mesh(points: Array, mask_mesh: Mesh) -> VoronoiMesh:
 
     # Now safe to access result
     csg_clip._update_shape()
-    result_meshes = csg_clip.get_meshes()
-
-    if result_meshes == null or result_meshes.size() == 0:
-        VoronoiLog.err("ClipCellToMesh: CSG intersection resulted in no mesh for cell centered at %s." % center)
-        return null
-
-    if result_meshes.size() > 2:
-        VoronoiLog.log("ClipCellToMesh: Warning - GetMeshes returned more array elements than expected (%d). Using first mesh." % result_meshes.size())
-
-    var resulting_mesh: ArrayMesh = result_meshes[1] as ArrayMesh
+   
+    var resulting_mesh: ArrayMesh = csg_clip.bake_static_mesh()
 
     if not is_instance_valid(resulting_mesh):
         VoronoiLog.err("ClipCellToMesh: CSG result mesh is invalid for cell centered at %s." % center)
         return null
-
+    
     if resulting_mesh.get_surface_count() == 0:
         return null
 
