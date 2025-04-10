@@ -159,8 +159,3 @@ static func generate_voronoi_cells(clipping_mesh: MeshInstance3D, tetrahedra: Ar
         cells += [voronoi_cell]
 
     voronoi_worker.create_geometry_from_sites_async(clipping_mesh, cells)
-
-## Applies outer textures from the generated texture to the target. Because the inner surface is 0, all other surfaces will be their original index in the mesh + 1.
-static func apply_target_textures(generated_mesh: MeshInstance3D, target_mesh: MeshInstance3D) -> void:
-    for surface_id in range(1, generated_mesh.mesh.get_surface_count()):
-        generated_mesh.mesh.surface_set_material(surface_id, target_mesh.mesh.surface_get_material(surface_id - 1))

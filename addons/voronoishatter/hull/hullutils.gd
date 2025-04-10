@@ -81,5 +81,6 @@ func recenter_mesh_origin(mesh: ArrayMesh) -> ArrayMesh:
 
         # Re-add the adjusted surface to the new mesh
         new_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+        new_mesh.surface_set_material(surface, material)
 
     return new_mesh

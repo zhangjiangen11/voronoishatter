@@ -172,9 +172,7 @@ func create_from_voronoi_mesh(result: VoronoiWorkerResult):
             mesh_instance.mesh.surface_set_material(surface, material)
     else:
         if has_outside_faces:
-                if inherit_outer_material:
-                    VoronoiGenerator.apply_target_textures(mesh_instance, target)
-                elif outer_material:
+                if not inherit_outer_material:
                     for surface_id in range(1, mesh_instance.mesh.get_surface_count()):
                         mesh_instance.mesh.surface_set_material(surface_id, outer_material)
 
