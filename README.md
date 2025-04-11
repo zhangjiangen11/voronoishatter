@@ -8,6 +8,9 @@
 # VoronoiShatter
 An easy and dynamic way to create Voronoi fracture geometry for your Godot game.
 
+> [!IMPORTANT]
+> This version of the README applies to v0.2 of VoronoiShatter. [Click here if you're still using v0.1.](https://github.com/robertvaradan/voronoishatter/blob/master/README.md?at=e6c83e642438383620870a8d5d3b73c81c24e77d)
+
 <p align="center">
     <img src="images/teapot_pre_shatter.jpg" width="400" alt="Before example of VoronoiShatter applied to teapot">
     <img src="images/teapot_post_shatter.jpg" width="400" alt="After example of VoronoiShatter applied to teapot">
@@ -19,11 +22,11 @@ An easy and dynamic way to create Voronoi fracture geometry for your Godot game.
 
 
 # Features
-* ✅ Create complex fractures on both convex and concave meshes
+* ✅ Create complex fractures from both convex and concave meshes
 * ✅ Seamless Voronoi geometry and materials with high fidelity to your mesh
-* ✅ Create rigidbodies from fractures for cool physic simulations
-* ✅ Multi-threaded worker class for parallelized
+* ✅ Quickly generator rigidbodies from fractures for cool physic simulations
 * ✅ Native GDScript - use this in any Godot game
+* ✅ C# adapter classes for a seamless experience cross-language 
 
 # Installation
 
@@ -43,7 +46,7 @@ Voronoi shatter meshes can be generated using a custom node, **VoronoiShatter**,
 
 
 ### VoronoiShatter Node
-This is the way to run this tool in the editor. Simply create this node in your scene, add a **MeshInstance3D** as a child, and click "**Generate Fracture Meshes**." Depending on your hardware, the below settings, and complexity of the mesh itself, the mesh will generate in seconds in a **VoronoiCollection** node. Make sure the mesh you are shattering is **manifold**—no surface should have any disconnected points, or the underlying CSG combiner mechanism will return a blank set of meshes.
+This is the way to run this tool in the editor. Simply create this node in your scene, add a **MeshInstance3D** as a child, and click "**Generate Fracture Meshes**." Depending on your hardware, the below settings, and complexity of the mesh itself, the mesh will generate in seconds in a **VoronoiCollection** node. Make sure the mesh you are shattering is **manifold**—no surface should have any disconnected points, or the underlying CSG combiner mechanism will return an empty set of meshes.
 
 * **Random Color** - Assigns a random color to each Voronoi fragment after generation. This is helpful for previewing the geometry itself to see how your settings influence generation.
 * **Inherit Outer Material** - Assigns the same material that the parent mesh currently has to all surfaces except the inner fracture surfaces.
@@ -60,24 +63,22 @@ This is the way to run this tool in the editor. Simply create this node in your 
 This is a simple node that is created with the mesh fragments. In the inspector, you can use the "**Create Rigid Bodies**" button to create rigid bodies and simple Voronoi shard collision shapes for convenience. Note: this can be slow on high mesh counts or complex geometry. Use at your own risk.
 
 ## In code
-Generally speaking, the most efficient way to use this plugin in code is to create a `VoronoiWorker` node, register it as a singleton (or use dependency injection), and start the worker threads. 
+Generally speaking, the most efficient way to use this plugin in code is to create a `VoronoiGenerator` node, register it as a singleton (or use dependency injection), and call the various functions it contains. 
 
 GDScript:
-```
-    var voronoi_worker = VoronoiWorker.new()
-    voronoi_worker.start_worker(WORKER_COUNT)
-    Engine.register_singleton("MyVoronoiWorker", voronoi_worker)
+```c
+    var voronoi_generator = VoronoiWorker.new()
+    Engine.register_singleton("MyVoronoiGenerator", voronoi_generator)
 ```
 
+In C#, you can use the `Adapted` classes that make cross-language scripting much easier.
 C#:
-```
-    var voronoiWorker = GD.Load<GDScript>("res://addons/voronoishatter/model/voronoiworker.gd");
-    var voronoiWorker = (GodotObject) myGDScript.New();
-    voronoiWorker.Call("start_worker", WORKER_COUNT);
+```csharp
+    var voronoiGenerator = AdaptedVoronoiGenerator.New(); // Creates the object assuming you installed this in your `addons` folder
     // Similar code for registering the singleton ...
 ```
 
-Then, you can listen to the worker's `mesh_generated` signal that emits a `VoronoiWorkerResult` **and then** call a function from `VoronoiGenerator`. To perform all the logic at once like the editor nodes do, use `VoronoiGenerator.create_from_mesh(target_mesh, config)`.
+Then, use the `create_from_mesh(target_mesh, config)` function on `VoronoiGenerator` to create the VoronoiGeometry and return it as an Array[Vector3].
 
 The `VoronoiGeneratorConfig` is of the following format:
 
@@ -88,12 +89,7 @@ var random_seed: int
 var num_samples: int
 # (optional) A 3D texture to finely control the seed placement
 var texture: Texture3D
-# (optional, default 1.0) The size of the Voronoi cell itself. Not yet implemented.
-var cell_scale: float = 1.0
 ```
-
-**Remember, you MUST listen to `mesh_generated`!**
-There is also a `VoronoiWorker.voronoi_fracture_finished` signal that you can listen to if you need to know when an entire job has finished.
 
 GDScript:
 
@@ -102,19 +98,31 @@ GDScript:
     config.random_seed = 13240324032
     config.num_samples = 100
     
-    var worker = Engine.get_singleton("MyVoronoiWorker", voronoi_worker)
-    worker.mesh_generated.connect(...) # In your callback, perform logic for doing something with the mesh (e.g. adding it to the scene). Remember to use `call_deferred` before doing anything that requires the main thread!
-    worker.voronoi_fracture_finished.connect(...) # In the callback, perform logic when the entire job is done. 
-    VoronoiGenerator.create_from_mesh(my_awesome_mesh, config, voronoi_worker)
+    var voronoi_generator = Engine.get_singleton("MyVoronoiGenerator", voronoi_generator)
+    var results = voronoi_generator.create_from_mesh(my_awesome_mesh, config)
+    ... create the meshes and add them as children to the scene, e.g ...
+```
+
+C#
+```csharp
+    var voronoiGenerator = Engine.GetSingleton("MyVoronoiGenerator") as AdaptedVoronoiGenerator;
+    var config = AdaptedVoronoiGeneratorConfig.New();
+    config.RandomSeed = 13240324032;
+    config.NumSamples = 100;
+
+    List<AdaptedVoronoiMesh> results = voronoiGenerator.CreateFromMesh(myAwesomeMesh, config);
 ```
 
 ### Tips for making this tool actually useful to you
-* **Pre-compose your meshes** — It's theoretically possible to run the tool "just in time" in a game, but the performance implications are such that pre-fragmenting your mesh and dynamically showing it makes a lot more sense.
-* **Use VoronoiWorker** - Creating what are often dozens of MeshInstance3Ds out of thin air is an expensive operation, not to mention the complex boolean geometry that the tool leverages, so the plugin makes use of multi-threading via the included **VoronoiWorker** virtual node to improve performance. By my own testing, it improved performance 2-3x compared to generating the meshes sequentially. When editing, the worker is started immediately when the plugin loads to avoid the overhead of creating the threads dynamically. If you are going to use this tool in code, you'll want to start the threads when your own game starts in line with [the official Godot documentation](https://docs.godotengine.org/en/stable/tutorials/performance/using_multiple_threads.html).
+* **Pre-shatter your meshes in the editor** — It's theoretically possible to run the tool "just in time" in a game, but the performance implications are such that pre-fragmenting your mesh and dynamically showing it makes a lot more sense.
 * **Stick to triplanar materials on the inner faces** - The UV maps aren't calculated for the inner shard faces, so it's best to use triplanar materials for the inner faces. The UVs from the outer meshes are transferred properly.
+* **Use manifold geometry** - If you attempt to use a mesh that has surfaces with "loose" geometry (that is, a surface that has some vertices that are disconnected), internal faces, areas with no thickness, or non-planar faces, you will likely end up with an empty VoronoiCollection as a result.
 
 # Changelog
-## v0.2-pre (next)
+## v0.2
+* Added CSharp bridge `Adapter` classes for easier cross-language scripting.
+* Much more dev-friendly experience.
+* Completely retooled how generator is done and removed a lot of unecessary classes. Everything is now done on the main UI thread, with the main bottlenecks sorted out.
 * Rendering the samples in the UI is faster. Some slight performance gains from disabling signals on generated meshes.
 
 ## v0.0.1

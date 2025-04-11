@@ -9,12 +9,13 @@ var WORKER_COUNT := 8
 func _enter_tree():
     add_custom_type("VoronoiShatter", "Node3D", preload("res://addons/voronoishatter/tools/voronoishatter.gd"), preload("res://addons/voronoishatter/tools/voronoishatter.svg"))
     add_custom_type("VoronoiCollection", "Node3D", preload("res://addons/voronoishatter/tools/voronoicollection.gd"), preload("res://addons/voronoishatter/tools/voronoicollection.svg"))
-    var voronoi_worker = VoronoiWorker.new()
-    Engine.register_singleton("EditorVoronoiWorker", voronoi_worker)
-    voronoi_worker.start_worker(WORKER_COUNT)
+    var voronoi_generator = VoronoiGenerator.new()
+    Engine.register_singleton("EditorVoronoiGenerator", voronoi_generator)
 
 
 func _exit_tree():
     remove_custom_type("VoronoiShatter")
     remove_custom_type("VoronoiCollection")
-    Engine.unregister_singleton("EditorVoronoiWorker")
+    var voronoi_generator = Engine.get_singleton("EditorVoronoiGenerator") as VoronoiGenerator
+    voronoi_generator.queue_free()
+    Engine.unregister_singleton("EditorVoronoiGenerator")

@@ -1,12 +1,25 @@
-## Helper functions to create Voronoi geometry
-extends Object
+## Helper functions to create Voronoi geometry. To use, create a new instance of this node and
+## call create_from_mesh() with a MeshInstance3D and VoronoiGeneratorConfig. The best way to use
+## this is to store it as a singleton instead of creating a new instance each time to avoid the
+## overhead of creating the child node instances.
+
+extends Node
 
 class_name VoronoiGenerator
+# These CSGMesh3Ds are used to efficiently perform the clipping logic seen below.
+var csg_clip = CSGMesh3D.new()
+var csg_mask = CSGMesh3D.new()
+
+func _init() -> void:
+    add_child(csg_clip)
+    csg_clip.add_child(csg_mask)
+    csg_mask.operation = CSGShape3D.OPERATION_INTERSECTION
+
 
 ## End-to-end function that samples points, creates tetrahedra, and generates voronoi cells (asyncronously).
 ## This is the best way to create fractures from a mesh. REQUIRES THE VoronoiWorker TO WORK!
 ## Make sure you listen to the signal as described in README.md. 
-static func create_from_mesh(mesh: MeshInstance3D, options: VoronoiGeneratorConfig, voronoi_worker: VoronoiWorker) -> void:
+func create_from_mesh(mesh: MeshInstance3D, options: VoronoiGeneratorConfig) -> Array[VoronoiMesh]:
     var points = sample_points(mesh.mesh, options)
     var tetrahedra = create_delauney_tetrahedra(points)
     # Dictionary[Vector3, int]
@@ -15,11 +28,11 @@ static func create_from_mesh(mesh: MeshInstance3D, options: VoronoiGeneratorConf
         if points[i] not in point_to_index_map:
             point_to_index_map[points[i]] = i
 
-    generate_voronoi_cells(mesh, tetrahedra, points, point_to_index_map, voronoi_worker)
+    return generate_voronoi_cells(mesh, tetrahedra, points, point_to_index_map)
 
 ## This function is used to sample points inside a bounding box. These points
 ## can be used for Delauney Tetrahedronization.
-static func sample_points(mesh: Mesh, options: VoronoiGeneratorConfig) -> Array[Vector3]:
+func sample_points(mesh: Mesh, options: VoronoiGeneratorConfig) -> Array[Vector3]:
     var aabb = mesh.get_aabb()
     var random_seed = options.random_seed
     var num_samples = options.num_samples
@@ -71,7 +84,7 @@ static func sample_points(mesh: Mesh, options: VoronoiGeneratorConfig) -> Array[
     return sample_points + endpoints
 
 ## Helper function to sample a Texture3D. Returns value in range 0.0 to 1.0
-static func sample_3d_texture(texture: Texture3D, normalized_position: Vector3) -> float:
+func sample_3d_texture(texture: Texture3D, normalized_position: Vector3) -> float:
     # Ensure position is in 0-1 range
     var pos = normalized_position.clamp(Vector3.ZERO, Vector3.ONE)
 
@@ -93,7 +106,7 @@ static func sample_3d_texture(texture: Texture3D, normalized_position: Vector3) 
     return color.r * 0.299 + color.g * 0.587 + color.b * 0.114
 
 ## Creates a set of tetrahedra from the given point cloud
-static func create_delauney_tetrahedra(points: Array[Vector3]) -> Array[Tetrahedron]:
+func create_delauney_tetrahedra(points: Array[Vector3]) -> Array[Tetrahedron]:
     var packed_points_array = PackedVector3Array(points)
     var delauney_indices = Geometry3D.tetrahedralize_delaunay(points)
 
@@ -123,7 +136,7 @@ static func create_delauney_tetrahedra(points: Array[Vector3]) -> Array[Tetrahed
     return tetrahedra
 
 ## Create voronoi cell meshes using the circumcenters of the given tetrahedra
-static func generate_voronoi_cells(clipping_mesh: MeshInstance3D, tetrahedra: Array[Tetrahedron], points: Array[Vector3], point_index_map: Dictionary, voronoi_worker: VoronoiWorker) -> void:
+func generate_voronoi_cells(clipping_mesh: MeshInstance3D, tetrahedra: Array[Tetrahedron], points: Array[Vector3], point_index_map: Dictionary) -> Array[VoronoiMesh]:
     # Map: Site Index -> List of Circumcenters (potential Voronoi cell vertices)
     # Dictionary[int, Array[Vector3]]
     var potential_cell_vertices: Dictionary[int, Array] = {}
@@ -158,4 +171,80 @@ static func generate_voronoi_cells(clipping_mesh: MeshInstance3D, tetrahedra: Ar
         voronoi_cell.site = points[key]
         cells += [voronoi_cell]
 
-    voronoi_worker.create_geometry_from_sites_async(clipping_mesh, cells)
+    return create_geometry_from_sites(clipping_mesh, cells)
+
+# Creates Voronoi cells from the given points by clipping them against a given mesh.
+func create_geometry_from_sites(mesh_instance: MeshInstance3D, cells: Array[VoronoiCell]) -> Array[VoronoiMesh]:
+    var voronoi_meshes: Array[VoronoiMesh] = []
+    for cell in cells:
+        # Didn't find enough circumcenters to generate the sites from
+        if not cell.is_valid():
+            continue
+
+        # Some of these circumcenters may be outside the shape of the mesh, so clip them to size
+        var clipped_hull: VoronoiMesh = clip_to_mesh(cell.vertices, mesh_instance.mesh)
+
+        if not clipped_hull:
+            continue
+
+        # Add the clipped mesh as the result
+        voronoi_meshes += [clipped_hull]
+
+    return voronoi_meshes
+
+# Creates a mesh out of the points and clips it against the given mask_mesh
+func clip_to_mesh(points: Array, mask_mesh: Mesh) -> VoronoiMesh:
+    var center = mask_mesh.get_aabb().get_center()
+
+    csg_mask.mesh = mask_mesh
+
+    var shape_3d: ConvexPolygonShape3D = ConvexPolygonShape3D.new()
+    shape_3d.set_points(PackedVector3Array(points))
+    csg_clip.mesh = shape_3d.get_debug_mesh()
+    
+    # Now safe to access result
+    csg_clip._update_shape()
+   
+    var resulting_mesh: ArrayMesh = csg_clip.bake_static_mesh()
+
+    if not is_instance_valid(resulting_mesh):
+        VoronoiLog.err("ClipCellToMesh: CSG result mesh is invalid for cell centered at %s." % center)
+        return null
+    
+    if resulting_mesh.get_surface_count() == 0:
+        return null
+
+    var offset = resulting_mesh.get_aabb().get_center()
+    resulting_mesh = recenter_mesh_origin(resulting_mesh)
+
+    var voronoi_mesh = VoronoiMesh.new()
+    voronoi_mesh.mesh = resulting_mesh
+    voronoi_mesh.position = - offset
+
+    return voronoi_mesh
+
+func recenter_mesh_origin(mesh: ArrayMesh) -> ArrayMesh:
+    var combined_aabb = mesh.get_aabb()
+    var center = combined_aabb.get_center()
+
+    var new_mesh = ArrayMesh.new()
+
+    for surface in range(mesh.get_surface_count()):
+        var arr = mesh.surface_get_arrays(surface)
+        var vertices = arr[Mesh.ARRAY_VERTEX]
+
+        if not len(vertices):
+            continue
+
+        # Offset all vertices by -center
+        for i in range(vertices.size()):
+            vertices[i] -= center
+
+        # Preserve material
+        var material = mesh.surface_get_material(surface)
+
+        # Re-add the adjusted surface to the new mesh
+        new_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+        new_mesh.surface_set_material(surface, material)
+
+    return new_mesh

@@ -68,22 +68,18 @@ func randomize_seed():
     seed = randi()
 
 var editable_owner: Node
+var voronoi_generator: VoronoiGenerator
 
 func _enter_tree():
     # Plugin initialization
     if Engine.is_editor_hint():
         EditorInterface.get_selection().connect("selection_changed", refresh_view)
         editable_owner = get_tree().get_edited_scene_root()
-        var worker = Engine.get_singleton("EditorVoronoiWorker") as VoronoiWorker
-        worker.mesh_generated.connect(handle_mesh_generated)
-        worker.voronoi_fracture_finished.connect(handle_voronoi_fracture_finished)
+        voronoi_generator = Engine.get_singleton("EditorVoronoiGenerator") as VoronoiGenerator
 
 func _exit_tree() -> void:
     if Engine.is_editor_hint():
         EditorInterface.get_selection().disconnect("selection_changed", refresh_view)
-        var worker = Engine.get_singleton("EditorVoronoiWorker") as VoronoiWorker
-        worker.mesh_generated.disconnect(handle_mesh_generated)
-        worker.voronoi_fracture_finished.disconnect(handle_voronoi_fracture_finished)
 
 func get_target_mesh() -> MeshInstance3D:
     for child in get_children():
@@ -124,30 +120,13 @@ func generate_fracture_meshes(config: VoronoiGeneratorConfig):
     if hide_original:
         target.visible = false
 
-    var voronoi_worker = Engine.get_singleton("EditorVoronoiWorker") as VoronoiWorker
-    VoronoiGenerator.create_from_mesh(target, config, voronoi_worker)
-
-# Called from a worker signal when a mesh is generated.
-func handle_mesh_generated(result: VoronoiWorkerResult):
-    Callable(self, "create_from_voronoi_mesh").call_deferred(result)
-
-func handle_voronoi_fracture_finished(result: MeshInstance3D):
-    Callable(self, "handle_done").call_deferred()
-
-func handle_done():
-    await get_tree().process_frame
-    if started:
-        VoronoiLog.log("Completed in " + str((Time.get_ticks_usec() - started) / 10e5) + " seconds")
-        started = null
+    var results := voronoi_generator.create_from_mesh(target, config)
+    for result in results:
+        create_from_voronoi_mesh(result)
+    VoronoiLog.log("Completed in " + str((Time.get_ticks_usec() - started) / 10e5) + " seconds")
     current_collection.set_block_signals(false)
 
-func create_from_voronoi_mesh(result: VoronoiWorkerResult):
-    # Don't create geometry for meshes that aren't targeted by this node
-    if not is_instance_valid(result.target_mesh) or result.target_mesh != get_target_mesh():
-        return
-
-    var voronoi_mesh = result.voronoi_mesh
-
+func create_from_voronoi_mesh(voronoi_mesh: VoronoiMesh):
     if voronoi_mesh == null:
         VoronoiLog.err("Skipping creation of null mesh")
 
@@ -179,24 +158,25 @@ func create_from_voronoi_mesh(result: VoronoiWorkerResult):
         if inner_material:
                 mesh_instance.mesh.surface_set_material(0, inner_material)
 
+    call_deferred("_deferred_add_child", mesh_instance)
+
+func _deferred_add_child(mesh_instance: MeshInstance3D):
     current_collection.add_child(mesh_instance)
     mesh_instance.set_owner(owner)
     mesh_instance.set_block_signals(false)
-
 
 func get_config() -> VoronoiGeneratorConfig:
     var config = VoronoiGeneratorConfig.new()
     config.num_samples = samples
     config.random_seed = seed
     config.texture = sample_texture
-    config.cell_scale = cell_scale
     return config
 
 # INTERNAL FUNCTIONS - for showing things in the editor, e.g.
 var sample_visualizers: Array[CSGSphere3D] = []
 
 func refresh_view():
-    if not Engine.is_editor_hint():
+    if not Engine.is_editor_hint() or not is_instance_valid(voronoi_generator):
         return
 
     for visualizer in sample_visualizers:
@@ -213,7 +193,8 @@ func refresh_view():
     material.albedo_color = Color.RED
     material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     material.disable_receive_shadows = true
-    for sample in VoronoiGenerator.sample_points(target.mesh, config):
+
+    for sample in voronoi_generator.sample_points(target.mesh, config):
         var sphere = CSGSphere3D.new()
         sphere.set_block_signals(true)
         sphere.material = material

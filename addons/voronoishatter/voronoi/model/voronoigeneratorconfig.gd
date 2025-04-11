@@ -9,5 +9,3 @@ var random_seed: int
 var num_samples: int
 # (optional) A 3D texture to finely control the seed placement
 var texture: Texture3D
-# (optional, default 1.0) The size of the voronoi cell itself. Not yet implemented.
-var cell_scale: float = 1.0
